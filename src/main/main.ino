@@ -4,6 +4,10 @@
 bool DEBUG;
 
 // analog inputs
+int ANALOG_IN_0 = A0;
+int ANALOG_IN_1 = A6;
+int ANALOG_IN_2 = A7;
+
 int a0 = 0;
 int a1 = 0;
 int a2 = 0;
@@ -21,12 +25,12 @@ int last_a2 = 0;
 
 // You could use other kind of LCD screens.
 // Just make sure it has at least 16 cols and at least 2 rows :).
-#define COLS 16
-#define ROWS 2
+#define LCD_COLS 16
+#define LCD_ROWS 2
 #define LCD_DELAY 120
  
 //LiquidCrystal(rs, enable, d4, d5, d6, d7)
-LiquidCrystal lcd(19, 18, 5, 4, 3, 2);
+LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
 
 String statusString;
 
@@ -46,9 +50,8 @@ char hexaKeys[ROWS][COLS] = {
   {'5', '6'},
 };
 
-
-byte rowPins[ROWS] = {6, 7, 8}; 
-byte colPins[COLS] = {16, 17}; 
+byte colPins[COLS] = {15, 16}; 
+byte rowPins[ROWS] = {17, 18, 19}; 
 
 Keypad customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS); 
 char customKey;
@@ -102,7 +105,19 @@ int colorArray[9][3] = {
   {255, 255, 255},
 };
 
-int r,g,b;
+int r, g, b;
+
+/* ----------------------------------------------------------------------------
+// Distance sensor constants
+ ---------------------------------------------------------------------------- */
+const int trigger_pin = 12;
+const int echo_pin = 8;
+
+long duration;
+long readDistance = 0L;
+long distanceMax = 0L;
+long distanceMin = 1024L;
+int distanceValue = 0;
 
 
 /* ----------------------------------------------------------------------------
@@ -121,10 +136,10 @@ void setup() {
   }
  
   // start LCD
-  lcd.begin(COLS, ROWS);
+  lcd.begin(LCD_COLS, LCD_ROWS);
   lcd.clear();
   lcd.setCursor(0, 0);
-  String headerString = " A0  A1  A2   K";
+  String headerString = " A0  A1  A2  D0";
   lcd.print(headerString);
 
 
@@ -133,6 +148,10 @@ void setup() {
   pinMode(green_pin, OUTPUT);
   pinMode(blue_pin, OUTPUT);
 
+  // distance sensor configuration
+  pinMode(trigger_pin, OUTPUT);
+  pinMode(echo_pin, INPUT);
+
 }
 
 
@@ -140,6 +159,7 @@ void setup() {
 // Main loop
  ---------------------------------------------------------------------------- */
 void loop() {
+
 
   // read and send keys
   customKey = customKeypad.getKey();
@@ -150,26 +170,25 @@ void loop() {
 
     pressedKey = cck + (customKey - '0');
 
-    // set RGB Led
-    if (pressedKey == 91) { setColor(1); } 
-    else if (pressedKey == 92) { setColor(2); } 
-    else if (pressedKey == 93) { setColor(3); } 
-    else if (pressedKey == 94) { setColor(4); } 
-    else if (pressedKey == 95) { setColor(5); } 
-    else if (pressedKey == 96) { setColor(6); }
-
-    sendCC(controlChange, pressedKey, 127);
-    sendCC(controlChange, pressedKey, 0);
-
+    sendKey(pressedKey);
   }
+
+  readAnalogInputs();
+  readDistanceSensor();
+
+  // adjust the distance sensor value
+  // distanceValue = map(readDistance, distanceMin, distanceMax, 0, 127);
+  // distanceValue = (readDistance - distanceMin) * 127L / (distanceMax - distanceMin);
+
+  distanceValue = map2(readDistance, distanceMin, distanceMax, 0, 127);
+  distanceValue = constrain(distanceValue, 0, 127);
+
 
   // set the status string on the LCD
   lcd.setCursor(0, 1);
 
-  statusString = getStatusString(a0, a1, a2, pressedKey);
+  statusString = getStatusString();
   lcd.print(statusString);
-
-  readAnalogInputs();
 
   // send the value only if different
   // TODO: find a better debounce for this
@@ -203,17 +222,20 @@ void loop() {
 void readAnalogInputs(){
   // set to a 0 - 127 MIDI compatible range.
   // TODO: try to use the map function for this
-  a0 = analogRead(A0) / 8;
-  a1 = analogRead(A6) / 8;
-  a2 = analogRead(A7) / 8;
+  a0 = analogRead(ANALOG_IN_0) / 8;
+  a1 = analogRead(ANALOG_IN_1) / 8;
+  a2 = analogRead(ANALOG_IN_2) / 8;
   
 }
 
+long map2(long x, long in_min, long in_max, long out_min, long out_max) {
+  return ((x - in_min) * (out_max - out_min) + out_min * (in_max - in_min)) / (in_max - in_min);
+}
 
 /* ----------------------------------------------------------------------------
 // LCD functions
  ---------------------------------------------------------------------------- */
-String getStatusString(int a0, int a1, int a2, int pressedKey) {
+String getStatusString() {
   // Format the status string to the LCD
   if (a0 < 10) { statusString = "  " + String(a0); }
   else if (a0 < 100) { statusString = " " + String(a0); } 
@@ -227,9 +249,11 @@ String getStatusString(int a0, int a1, int a2, int pressedKey) {
   else if (a2 < 100) { statusString += "  " + String(a2); } 
   else { statusString += " " + String(a2); }
 
-  if (pressedKey > 0) { statusString += "  " + String(pressedKey); }
-  else { statusString += "   " + String(pressedKey); }
+  if (distanceValue < 10) { statusString += "  " + String(distanceValue); }
+  else if (distanceValue < 100) { statusString += " " + String(distanceValue); }
+  else { statusString += " " + String(distanceValue); }
 
+  // statusString += pressedKey;
   return statusString;
 }
 
@@ -238,18 +262,46 @@ String getStatusString(int a0, int a1, int a2, int pressedKey) {
 // MIDI Functions
  ---------------------------------------------------------------------------- */
 void sendCC(int statusByte, int dataByte1, int dataByte2) {
-  Serial.write(statusByte);
-  Serial.write(dataByte1);
-  Serial.write(dataByte2);
-}
 
+  if (DEBUG == false) {
+    Serial.write(statusByte);
+    Serial.write(dataByte1);
+    Serial.write(dataByte2);
+  } else {
+    Serial.print("sendCC: ");
+    Serial.print(statusByte);
+    Serial.print(" ");
+    Serial.print(dataByte1);
+    Serial.print(" ");
+    Serial.print(dataByte2);
+   }
+}
 
 void noteOn(int cmd, int pitch, int velocity) {
-  Serial.write(cmd);
-  Serial.write(pitch);
-  Serial.write(velocity);
+  if (DEBUG == false) {
+    Serial.write(cmd);
+    Serial.write(pitch);
+    Serial.write(velocity);
+  } else {
+    Serial.print("noteOn: ");
+    Serial.print(cmd);
+    Serial.print(" ");
+    Serial.print(pitch);
+    Serial.print(" ");
+    Serial.print(velocity); 
+  }
 }
 
+void sendKey(int pressedKey) {
+    
+  setColor(90 - pressedKey);
+  
+  if (pressedKey == 96) { calibrateDistanceSensor(); }
+  else {
+    sendCC(controlChange, pressedKey, 127);
+    sendCC(controlChange, pressedKey, 0);
+  }
+}
 
 /* ----------------------------------------------------------------------------
 // RGB LED functions
@@ -266,4 +318,44 @@ void RGB_color(int red_light_value, int green_light_value, int blue_light_value)
   analogWrite(red_pin, red_light_value);
   analogWrite(green_pin, green_light_value);
   analogWrite(blue_pin, blue_light_value);
+}
+
+
+/* ----------------------------------------------------------------------------
+// Distance sensor functions
+ ---------------------------------------------------------------------------- */
+void readDistanceSensor(){
+  digitalWrite(trigger_pin, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(trigger_pin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigger_pin, LOW);
+
+  duration = pulseIn(echo_pin, HIGH);
+
+  readDistance = duration * 0.017;
+}
+
+
+void calibrateDistanceSensor() {
+
+  // TODO: write to the LCD
+
+  // calibrate the distance sensor for 5 seconds
+  int entered = millis();
+  while ((millis() - entered) < 5000){
+    readDistanceSensor();
+
+    // record the maximum sensor value
+    if (readDistance > distanceMax) {
+      distanceMax = readDistance;
+    }
+  
+    // record the minimum sensor value
+    if (readDistance < distanceMin) {
+      distanceMin = readDistance;
+    }
+  }
+
 }
