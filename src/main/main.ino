@@ -1,38 +1,65 @@
+/*
+ * Arduino tonestack controller
+ * Controlls ToneStack app (iOS) via MIDI messages
+ * Might prove useful for live presentations.
+ *
+ * Version 0.1 February, 2020
+ * 2019 Javier Mejias
+ * https://worldprogproject.com
+ */
+ 
+
 /* ----------------------------------------------------------------------------
 // General constants
  ---------------------------------------------------------------------------- */
 bool DEBUG;
 
-// analog inputs
-int ANALOG_IN_0 = A0;
-int ANALOG_IN_1 = A6;
-int ANALOG_IN_2 = A7;
+// Feel free to re-arrange any pin to your taste
 
+// physical analog inputs
+int ANALOG_IN_0 = A7;
+int ANALOG_IN_1 = A6;
+int ANALOG_IN_2 = A5;
+
+// variables for values
 int a0 = 0;
 int a1 = 0;
 int a2 = 0;
 
-
+// buffer for comparison.
 int last_a0 = 0;
 int last_a1 = 0;
 int last_a2 = 0;
+
+
+// physical digital I/O
+// keyboard colums
+int KPC1_IN = 13;
+int KPC2_IN = 14;
+int KPC3_IN = 15;
+int KPC4_IN = 16;
+
+// keyboard rows
+int KPR1_IN = 17;
+int KPR2_IN = 18;
+
 
 /* ----------------------------------------------------------------------------
 // Keypad constants
  -----------------------------------------------------------------------------*/
 #include <Keypad.h>
 
-const byte ROWS = 3; 
-const byte COLS = 2; 
+// Keyboard configuration
+const byte ROWS = 2; 
+const byte COLS = 4; 
 
 char hexaKeys[ROWS][COLS] = {
-  {'2', '1'},
-  {'3', '4'},
-  {'5', '6'},
+  {'1', '2', '3', '4'},
+  {'5', '6', '7', '8'},
 };
 
-byte colPins[COLS] = {15, 16}; 
-byte rowPins[ROWS] = {17, 18, 19}; 
+byte colPins[COLS] = {KPC1_IN, KPC2_IN, KPC3_IN, KPC4_IN}; 
+byte rowPins[ROWS] = {KPR1_IN, KPR2_IN}; 
 
 Keypad customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS); 
 char customKey;
@@ -74,9 +101,23 @@ int cca2 = 112;
 
 // Key controller addr
 // set to 90 for base
-int cck = 90;
+int cck = 0;
 
-int pressedKey = 91;
+int pressedKey = 0;
+
+
+/* ----------------------------------------------------------------------------
+// Distance sensor constants
+ ---------------------------------------------------------------------------- */
+const int TRIGGER_PIN = 9;
+const int ECHO_PIN = 8;
+
+long duration;
+long readDistance = 0L;
+long distanceMax = 0L;
+long distanceMin = 1024L;
+int distanceValue = 0;
+
 
 
 /* ----------------------------------------------------------------------------
@@ -84,7 +125,8 @@ int pressedKey = 91;
  ---------------------------------------------------------------------------- */
 void setup() {
 
-  DEBUG = false;
+  // DEBUG = false;
+  DEBUG = true;
 
   if (DEBUG == false) {
     // enable midi communicaiton
@@ -98,9 +140,14 @@ void setup() {
   lcd.begin(LCD_COLS, LCD_ROWS);
   lcd.clear();
   lcd.setCursor(0, 0);
-  String headerString = " A0  A1  A2  K";
+  String headerString = " A0  A1  A2   D";
   lcd.print(headerString);
 
+
+  // distance sensor configuration
+  pinMode(TRIGGER_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  
 }
 
 
@@ -123,6 +170,8 @@ void loop() {
   }
 
   readAnalogInputs();
+  readDistanceSensor();
+
 
   // set the status string on the LCD
   lcd.setCursor(0, 1);
@@ -183,7 +232,11 @@ String getStatusString() {
   else if (a2 < 100) { statusString += "  " + String(a2); } 
   else { statusString += " " + String(a2); }
 
-  statusString += "  " + String(pressedKey);
+  
+  if (readDistance < 10) { statusString += "  " + String(readDistance); }
+  else if (readDistance < 100) { statusString += " " + String(readDistance); } 
+  else { statusString += " " + String(readDistance); }
+  
   return statusString;
 }
 
@@ -203,7 +256,7 @@ void sendCC(int statusByte, int dataByte1, int dataByte2) {
     Serial.print(" ");
     Serial.print(dataByte1);
     Serial.print(" ");
-    Serial.print(dataByte2);
+    Serial.println(dataByte2);
    }
 }
 
@@ -218,11 +271,60 @@ void noteOn(int cmd, int pitch, int velocity) {
     Serial.print(" ");
     Serial.print(pitch);
     Serial.print(" ");
-    Serial.print(velocity); 
+    Serial.println(velocity); 
   }
 }
 
 void sendKey(int pressedKey) {
-  sendCC(controlChange, pressedKey, 127);
-  sendCC(controlChange, pressedKey, 0);
+  // TODO: find a better calibrate sensor key and mapping
+  if (DEBUG == false) {
+    if (pressedKey == 96) { calibrateDistanceSensor(); }
+    else {
+      sendCC(controlChange, pressedKey, 127);
+      sendCC(controlChange, pressedKey, 0);
+    }
+   } else {
+
+    Serial.print("keyOn: ");
+    Serial.println(pressedKey); 
+  }
+}
+
+/* ----------------------------------------------------------------------------
+// Distance sensor functions
+ ---------------------------------------------------------------------------- */
+void readDistanceSensor(){
+  digitalWrite(TRIGGER_PIN, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(TRIGGER_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIGGER_PIN, LOW);
+
+  duration = pulseIn(ECHO_PIN, HIGH);
+
+  readDistance = duration * 0.017;
+}
+
+
+void calibrateDistanceSensor() {
+
+  // TODO: write to the LCD
+
+  // calibrate the distance sensor for 5 seconds
+  int entered = millis();
+  while ((millis() - entered) < 5000){
+    readDistanceSensor();
+
+    // record the maximum sensor value
+    if (readDistance > distanceMax) {
+      distanceMax = readDistance;
+    }
+  
+    // record the minimum sensor value
+    if (readDistance < distanceMin) {
+      distanceMin = readDistance;
+    }
+  }
+
 }
