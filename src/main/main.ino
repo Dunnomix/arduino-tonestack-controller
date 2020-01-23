@@ -107,20 +107,6 @@ int pressedKey = 0;
 
 
 /* ----------------------------------------------------------------------------
-// Distance sensor constants
- ---------------------------------------------------------------------------- */
-const int TRIGGER_PIN = 9;
-const int ECHO_PIN = 8;
-
-long duration;
-long readDistance = 0L;
-long distanceMax = 0L;
-long distanceMin = 1024L;
-int distanceValue = 0;
-
-
-
-/* ----------------------------------------------------------------------------
 // Setup
  ---------------------------------------------------------------------------- */
 void setup() {
@@ -140,14 +126,11 @@ void setup() {
   lcd.begin(LCD_COLS, LCD_ROWS);
   lcd.clear();
   lcd.setCursor(0, 0);
-  String headerString = " A0  A1  A2   D";
+
+  // initialize the LCD
+  lcd.setCursor(0, 0);
+  String headerString = " A0  A1  A2   K";
   lcd.print(headerString);
-
-
-  // distance sensor configuration
-  pinMode(TRIGGER_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
-  
 }
 
 
@@ -170,7 +153,7 @@ void loop() {
   }
 
   readAnalogInputs();
-  readDistanceSensor();
+  // readDistanceSensor();
 
 
   // set the status string on the LCD
@@ -233,9 +216,7 @@ String getStatusString() {
   else { statusString += " " + String(a2); }
 
   
-  if (readDistance < 10) { statusString += "  " + String(readDistance); }
-  else if (readDistance < 100) { statusString += " " + String(readDistance); } 
-  else { statusString += " " + String(readDistance); }
+  statusString += "   " + String(pressedKey);
   
   return statusString;
 }
@@ -288,43 +269,4 @@ void sendKey(int pressedKey) {
     Serial.print("keyOn: ");
     Serial.println(pressedKey); 
   }
-}
-
-/* ----------------------------------------------------------------------------
-// Distance sensor functions
- ---------------------------------------------------------------------------- */
-void readDistanceSensor(){
-  digitalWrite(TRIGGER_PIN, LOW);
-  delayMicroseconds(2);
-
-  digitalWrite(TRIGGER_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIGGER_PIN, LOW);
-
-  duration = pulseIn(ECHO_PIN, HIGH);
-
-  readDistance = duration * 0.017;
-}
-
-
-void calibrateDistanceSensor() {
-
-  // TODO: write to the LCD
-
-  // calibrate the distance sensor for 5 seconds
-  int entered = millis();
-  while ((millis() - entered) < 5000){
-    readDistanceSensor();
-
-    // record the maximum sensor value
-    if (readDistance > distanceMax) {
-      distanceMax = readDistance;
-    }
-  
-    // record the minimum sensor value
-    if (readDistance < distanceMin) {
-      distanceMin = readDistance;
-    }
-  }
-
 }
