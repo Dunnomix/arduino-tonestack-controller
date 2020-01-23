@@ -14,3 +14,6 @@ see [src/README.md](src/README.md)
 See the [schematics folder](./schematics/) for the building details.
 
 if you want to add your own triggers maybe youd like to read this [README.md](./src/README.md)
+
+# TODO:
+* change the midi codes for garageband

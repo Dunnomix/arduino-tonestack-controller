@@ -111,8 +111,8 @@ int pressedKey = 0;
  ---------------------------------------------------------------------------- */
 void setup() {
 
-  // DEBUG = false;
-  DEBUG = true;
+  DEBUG = false;
+  //DEBUG = true;
 
   if (DEBUG == false) {
     // enable midi communicaiton
@@ -259,11 +259,8 @@ void noteOn(int cmd, int pitch, int velocity) {
 void sendKey(int pressedKey) {
   // TODO: find a better calibrate sensor key and mapping
   if (DEBUG == false) {
-    if (pressedKey == 96) { calibrateDistanceSensor(); }
-    else {
-      sendCC(controlChange, pressedKey, 127);
-      sendCC(controlChange, pressedKey, 0);
-    }
+    sendCC(controlChange, pressedKey, 127);
+    sendCC(controlChange, pressedKey, 0);
    } else {
 
     Serial.print("keyOn: ");
