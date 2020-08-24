@@ -3,7 +3,7 @@
  * Controlls ToneStack app (iOS) via MIDI messages
  * Might prove useful for live presentations.
  *
- * Version 0.1 February, 2020
+ * Version 0.2 August, 2020
  * 2019 Javier Mejias
  * https://worldprogproject.com
  */
@@ -34,14 +34,14 @@ int last_a2 = 0;
 
 // physical digital I/O
 // keyboard colums
-int KPC1_IN = 13;
-int KPC2_IN = 14;
-int KPC3_IN = 15;
-int KPC4_IN = 16;
+int KPC1_IN = 15;
+int KPC2_IN = 23;
+int KPC3_IN = 24;
+int KPC4_IN = 25;
 
 // keyboard rows
-int KPR1_IN = 17;
-int KPR2_IN = 18;
+int KPR1_IN = 26;
+int KPR2_IN = 27;
 
 
 /* ----------------------------------------------------------------------------
@@ -65,6 +65,7 @@ Keypad customKeypad = Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS)
 char customKey;
 char last_key = ' ';
 
+String statusString = "";
 
 /* ----------------------------------------------------------------------------
 // LCD constants
@@ -78,39 +79,32 @@ LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
 // Just make sure it has at least 16 cols and at least 2 rows :).
 #define LCD_COLS 16
 #define LCD_ROWS 2
-#define LCD_DELAY 120.0..........................................................................................................................................................................................
-
-
+#define LCD_DELAY 120.0
 /* ----------------------------------------------------------------------------
 // MIDI constants
  ---------------------------------------------------------------------------- */
-// Control Change message
-// Channel followed by CC command (0xB)
-// Channel set to 16
-int controlChange = 0xB0;
-int noteChange = 0x90;
+// CC address, from 176 to 190
+// see https://www.midi.org/specifications-old/item/table-2-expanded-messages-list-status-bytes
+int controlChange = 176;
 
-// Controller number
-// this is the second byte on the midi message
-// CC value
-int cca0 = 110;
-int cca1 = 111;
-int cca2 = 112;
+// MIDI CC value
+// see https://www.midi.org/specifications-old/item/table-3-control-change-messages-data-bytes-2
+int cca0 = 9;
+int cca1 = 3;
+int cca2 = 7;
 
-// Key controller addr
-// set to 90 for base
-int cck = 0;
-
+// Key controller CC address
+// see https://www.midi.org/specifications-old/item/table-3-control-change-messages-data-bytes-2
+int cck = 20;
 int pressedKey = 0;
-
 
 /* ----------------------------------------------------------------------------
 // Setup
  ---------------------------------------------------------------------------- */
 void setup() {
 
-  DEBUG = false;
-  //DEBUG = true;
+  // DEBUG = false;
+  DEBUG = true;
 
   if (DEBUG == false) {
     // enable midi communicaiton
@@ -200,15 +194,23 @@ void readAnalogInputs(){
 // LCD functions
  ---------------------------------------------------------------------------- */
 String getStatusString() {
+
+  statusString = "";
+
   // Format the status string to the LCD
+  // TODO: find a better formatting routine
+
+  // First metric
   if (a0 < 10) { statusString = "  " + String(a0); }
   else if (a0 < 100) { statusString = " " + String(a0); } 
   else { statusString = "" + String(a0); }
 
+  // second metric
   if (a1 < 10) { statusString += "   " + String(a1); }
   else if (a1 < 100) { statusString += "  " + String(a1); }
   else { statusString += " " + String(a1); }
 
+  // third metric
   if (a2 < 10) { statusString += "   " + String(a2); }
   else if (a2 < 100) { statusString += "  " + String(a2); } 
   else { statusString += " " + String(a2); }
@@ -260,8 +262,18 @@ void sendKey(int pressedKey) {
     sendCC(controlChange, pressedKey, 127);
     sendCC(controlChange, pressedKey, 0);
    } else {
-
-    Serial.print("keyOn: ");
-    Serial.println(pressedKey); 
+    Serial.print("keyOn : ");
+    Serial.print(controlChange);
+    Serial.print(" ");
+    Serial.print(pressedKey);
+    Serial.print(" ");
+    Serial.println(127);
+    //
+    Serial.print("keyOn : ");
+    Serial.print(controlChange);
+    Serial.print(" ");
+    Serial.print(pressedKey);
+    Serial.print(" ");
+    Serial.println(0); 
   }
 }

@@ -10,6 +10,10 @@ Warning, still under development.
 see [src/README.md](src/README.md)
 
 
+## How to use with a DAW
+see [src/DAW.md](src/DAW.md)
+
+
 ## How to build
 See the [schematics folder](./schematics/) for the building details.
 
